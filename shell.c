@@ -142,8 +142,6 @@ void handle_fork(char *command,
                 close(pfd[1]);
               }
               else if(rw_pipe_id == 1){
-                printf("pfd[0]: %d\n", pfd[0]);
-                printf("pfd[1]: %d\n", pfd[1]);
                 close(pfd[1]);
                 if(dup2(pfd[0], 0) == -1){
                   perror("dup2 failed to copy make pfd[0] a copy of stdin");
