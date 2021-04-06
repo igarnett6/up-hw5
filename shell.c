@@ -42,7 +42,8 @@ int main()
     sigaction(SIGINT, &handle_kill, &old_int_act);
     sigaction(SIGQUIT, &handle_kill, &old_quit_act);
 
-    while(true) {
+
+    while(true) {     // loop to show shell prompt
         char *prompt = getenv("PS1");
         if(prompt != NULL){
           printf(prompt);
@@ -62,9 +63,9 @@ int main()
           sigaction(SIGQUIT, &old_quit_act, NULL);
           exit(0);
         }
-        int changeDir = 0; //bool for if cd in stdin
+        bool changeDir = false; // bool to check if user entered cd
         if((strncmp(command, "cd", 2)) == 0){
-          changeDir = 1;
+          changeDir = true;
         }
         if(changeDir == 1){
           strtok(command, " ");
@@ -109,9 +110,6 @@ bool handleForkIfPipe(char *command, struct sigaction handle_kill){
       perror("failed to open pipe");
       exit(1);
     }
-    // close(pfd[1]);
-    // printf("pfd[0]: %d\n", pfd[0]);
-    // printf("pfd[1]: %d\n", pfd[1]);
     handle_fork(cmd1, handle_kill, true, 0, pfd);
     handle_fork(cmd2, handle_kill, true, 1, pfd);
     return true;
@@ -136,9 +134,6 @@ void handle_fork(char *command,
                   perror("dup2 failed to make pfd[1] a copy of stdout");
                   exit(1);
                 }
-                // int test_pipe = open("./output.txt", O_RDWR | O_TRUNC | O_CREAT, 0666); //testing
-                // dup2(test_pipe, 1);
-                // close(test_pipe); //pipe redir
                 close(pfd[1]);
               }
               else if(rw_pipe_id == 1){
