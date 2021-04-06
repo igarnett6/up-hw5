@@ -36,16 +36,13 @@ void kill_handler(int sigNum){
 
 
 int main()
-{
-
-    //handle kill signals
+{    //handle kill signals
     struct sigaction handle_kill, old_int_act, old_quit_act;
     handle_kill.sa_handler = SIG_IGN;
     sigemptyset(&handle_kill.sa_mask);
     handle_kill.sa_flags = 0;
     sigaction(SIGINT, &handle_kill, &old_int_act);
     sigaction(SIGQUIT, &handle_kill, &old_quit_act);
-
 
     while(true) {     // loop to show shell prompt
         char *prompt = getenv("PS1");
@@ -106,8 +103,8 @@ bool handleCD(char *command){
 }
 
 bool handleForkIfPipe(char *command, struct sigaction handle_kill){
-  char *cmd1;
-  char *cmd2;
+  char *cmd1; // left side of |
+  char *cmd2; // right side of |
   if((strstr(command, "|")) != NULL){
     cmd1 = strtok(command, "|");
     cmd2 = strtok(NULL, "|");
@@ -124,7 +121,7 @@ bool handleForkIfPipe(char *command, struct sigaction handle_kill){
     handleFork(cmd2, handle_kill, true, 1, pfd);
     return true;
   }
-  else{ return false;}
+  else{ return false;} // if there is no need to use a pipe return false
 }
 
 void handleFork(char *command,
@@ -133,12 +130,13 @@ void handleFork(char *command,
         int rw_pipe_id,
         int pfd[]){
           if(fork() == 0){
+            // change disposition to stop ignoring sigint and sigquit while in child proc
             handle_kill.sa_handler = kill_handler;
             sigaction(SIGINT, &handle_kill, NULL);
             sigaction(SIGQUIT, &handle_kill, NULL);
 
-            if(isPiped == true){
-              if(rw_pipe_id == 0){
+            if(isPiped == true){  // if proc is part of piped pair of procs
+              if(rw_pipe_id == 0){ // redir stdout into writing end of pipe for left side of |
                 close(pfd[0]);
                 if(dup2(pfd[1], 1) == -1){
                   perror("dup2 failed to make pfd[1] a copy of stdout");
@@ -146,7 +144,7 @@ void handleFork(char *command,
                 }
                 close(pfd[1]);
               }
-              else if(rw_pipe_id == 1){
+              else if(rw_pipe_id == 1){ // redir stdin to read from pipe for right side of |
                 close(pfd[1]);
                 if(dup2(pfd[0], 0) == -1){
                   perror("dup2 failed to copy make pfd[0] a copy of stdin");
@@ -156,6 +154,7 @@ void handleFork(char *command,
               }
             }
 
+            //handle any redir then exec
             char cmdCopy[4096];
             strcpy(cmdCopy, command);
             checkRedirStdin(cmdCopy);
@@ -172,7 +171,7 @@ void handleFork(char *command,
             execCommand(command);
             _exit(0);
           }
-          else{
+          else{ // if in parent proc, close writing end of pipe
             if(isPiped == true){
               close(pfd[1]);
             }
@@ -282,7 +281,7 @@ void checkAppendOutErr(char *command){
   }
 }
 
-void execCommand(char *command){
+void execCommand(char *command){ // tokenizes and executes command
   char *token = calloc(1, 4096);
   token = strtok(command, " ");
   char *args[4096];
