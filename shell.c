@@ -13,7 +13,7 @@
 //prototypes
 void handleExit(char* command, struct sigaction old_quit_act, struct sigaction old_int_act);
 bool handleCD(char *command);
-void handle_fork(char *command,
+void handleFork(char *command,
                  struct sigaction handle_kill,
                  bool isPiped,
                  int rw_pipe_id,
@@ -68,7 +68,7 @@ int main()
         }
         if(handleForkIfPipe(command, handle_kill) == false){
           // if no '|' char in command
-          handle_fork(command, handle_kill, false, '\0', '\0'); // last 2 args null with no pipe
+          handleFork(command, handle_kill, false, '\0', '\0'); // last 2 args null with no pipe
           if((wait(NULL)) == -1){
             perror("No children");
           }
@@ -120,14 +120,14 @@ bool handleForkIfPipe(char *command, struct sigaction handle_kill){
       perror("failed to open pipe");
       exit(1);
     }
-    handle_fork(cmd1, handle_kill, true, 0, pfd);
-    handle_fork(cmd2, handle_kill, true, 1, pfd);
+    handleFork(cmd1, handle_kill, true, 0, pfd);
+    handleFork(cmd2, handle_kill, true, 1, pfd);
     return true;
   }
   else{ return false;}
 }
 
-void handle_fork(char *command,
+void handleFork(char *command,
         struct sigaction handle_kill,
         bool isPiped,
         int rw_pipe_id,
