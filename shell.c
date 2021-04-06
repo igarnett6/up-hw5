@@ -11,6 +11,7 @@
 
 
 //prototypes
+void handleExit(char* command, struct sigaction old_quit_act, struct sigaction old_int_act);
 bool handleCD(char *command);
 void handle_fork(char *command,
                  struct sigaction handle_kill,
@@ -26,6 +27,8 @@ void checkRedirOutErr(char *command);;
 void checkAppendOutErr(char *command);
 void execCommand(char *command);
 
+
+//signal handler for sigquit and sigint
 void kill_handler(int sigNum){
   perror("process killed by signal");
   exit(1);
@@ -35,7 +38,7 @@ void kill_handler(int sigNum){
 int main()
 {
 
-    //handle sigint
+    //handle kill signals
     struct sigaction handle_kill, old_int_act, old_quit_act;
     handle_kill.sa_handler = SIG_IGN;
     sigemptyset(&handle_kill.sa_mask);
@@ -51,34 +54,28 @@ int main()
         }
         else{
           char pwd[4096];
-          realpath(".", pwd);
-          printf("╭─%s -> [PID: %d]\n", pwd, getpid());
+          realpath(".", pwd); // used in shell prompt
+          printf("╭─%s -> [PID: %d]\n", pwd, getpid()); // pid of shell included in prompt
           printf("╰─(╯°益°)╯彡┻━┻ ");
         }
-        char *command = calloc(1, 4096);
+        char *command = calloc(1, 4096); // user input, shell command
         fgets(command, 4096, stdin);
-        int len = strlen(command);
+        int len = strlen(command); // len of command used to remove newline chars
         if (command[len-1] == '\n') command[len-1] = '\0';
-        if((strncmp(command, "exit", 4)) == 0){
-          sigaction(SIGINT, &old_int_act, NULL);
-          sigaction(SIGQUIT, &old_quit_act, NULL);
-          exit(0);
-        }
-
+        handleExit(command, old_quit_act, old_int_act);
         if(handleCD(command) == true){
           continue;
         }
-
-
-        char cmdCopy[4096];
-        strcpy(cmdCopy, command);
-        if(handleForkIfPipe(cmdCopy, handle_kill) == false){ //if pipe, fork twice
-          handle_fork(command, handle_kill, false, '\0', '\0');
+        if(handleForkIfPipe(command, handle_kill) == false){
+          // if no '|' char in command
+          handle_fork(command, handle_kill, false, '\0', '\0'); // last 2 args null with no pipe
           if((wait(NULL)) == -1){
             perror("No children");
           }
         }
         else{
+           // if '|' in command handleForkIfPipe() calls handleFork() for both piped commands
+           //then wait for both forked child processes
           if((wait(NULL)) == -1){
             perror("No children");
           }
@@ -86,11 +83,17 @@ int main()
             perror("No children");
           }
         }
-
         free(command);
     }
 }
 
+void handleExit(char* command, struct sigaction old_quit_act, struct sigaction old_int_act){
+  if((strncmp(command, "exit", 4)) == 0){ // if user entered exit close shell
+    sigaction(SIGINT, &old_int_act, NULL); // reset to old sigint disposition
+    sigaction(SIGQUIT, &old_quit_act, NULL); // reset to old sigquit disposition
+    exit(0);
+  }
+}
 
 bool handleCD(char *command){
   if((strncmp(command, "cd", 2)) == 0){
