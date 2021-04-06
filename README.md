@@ -23,6 +23,5 @@ To remove old executables run:
 
 `make clean`
 
-## How to run
 The shell can be started with `./shell` and used as normal.
 The shell can be terminated by entering `exit`.
