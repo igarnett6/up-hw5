@@ -11,6 +11,7 @@
 
 
 //prototypes
+bool handleCD(char *command);
 void handle_fork(char *command,
                  struct sigaction handle_kill,
                  bool isPiped,
@@ -63,16 +64,11 @@ int main()
           sigaction(SIGQUIT, &old_quit_act, NULL);
           exit(0);
         }
-        bool changeDir = false; // bool to check if user entered cd
-        if((strncmp(command, "cd", 2)) == 0){
-          changeDir = true;
-        }
-        if(changeDir == 1){
-          strtok(command, " ");
-          char *newDir = strtok(NULL, " ");
-          chdir(newDir);
+
+        if(handleCD(command) == true){
           continue;
         }
+
 
         char cmdCopy[4096];
         strcpy(cmdCopy, command);
@@ -93,6 +89,17 @@ int main()
 
         free(command);
     }
+}
+
+
+bool handleCD(char *command){
+  if((strncmp(command, "cd", 2)) == 0){
+    strtok(command, " ");
+    char *newDir = strtok(NULL, " ");
+    chdir(newDir);
+    return true;
+  }
+  return false;
 }
 
 bool handleForkIfPipe(char *command, struct sigaction handle_kill){
