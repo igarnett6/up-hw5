@@ -1,3 +1,8 @@
-LS -L
-LS -L
-LS -L
+io_redir.txt
+Makefile
+output-from-ls.txt
+output.txt
+output.txtt
+shell
+shell.c
+test_pipe.c
