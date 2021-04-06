@@ -1,12 +1,3 @@
-/*
-  Minimal Shell
-  "Looping":
-     Displays a prompt
-     Takes in a command
-     Executes the command
-  Since it execs without forking, it can only run a single command.
-  Also doesn't tokenize the input...
- */
 // #define _POSIX_C_SOURCE
 #include <stdio.h>   // printf, fgets
 #include <string.h>  // strlen
@@ -20,6 +11,12 @@
 
 
 //prototypes
+void handle_fork(char *command,
+                 struct sigaction handle_kill,
+                 bool isPiped,
+                 int rw_pipe_id,
+                 int pfd[]);
+bool handleForkIfPipe(char *command, struct sigaction handle_kill);
 void checkRedirStdin(char *command);
 void checkRedirStdout(char *command);
 void checkRedirAppend(char *command);
@@ -33,8 +30,10 @@ void kill_handler(int sigNum){
   exit(1);
 }
 
+
 int main()
 {
+
     //handle sigint
     struct sigaction handle_kill, old_int_act, old_quit_act;
     handle_kill.sa_handler = SIG_IGN;
@@ -74,35 +73,109 @@ int main()
           continue;
         }
 
-        if(fork() == 0){
-          handle_kill.sa_handler = kill_handler;
-          sigaction(SIGINT, &handle_kill, NULL);
-          sigaction(SIGQUIT, &handle_kill, NULL);
-
-          char cmdCopy[4096];
-          strcpy(cmdCopy, command);
-          checkRedirStdin(cmdCopy);
-          strcpy(cmdCopy, command);
-          checkRedirStdout(cmdCopy);
-          strcpy(cmdCopy, command);
-          checkRedirAppend(cmdCopy);
-          strcpy(cmdCopy, command);
-          checkRedirStderr(cmdCopy);
-          strcpy(cmdCopy, command);
-          checkRedirOutErr(cmdCopy);
-          strcpy(cmdCopy, command);
-          checkAppendOutErr(cmdCopy);
-          execCommand(command);
-          _exit(0);
+        char cmdCopy[4096];
+        strcpy(cmdCopy, command);
+        if(handleForkIfPipe(cmdCopy, handle_kill) == false){ //if pipe, fork twice
+          handle_fork(command, handle_kill, false, '\0', '\0');
+          if((wait(NULL)) == -1){
+            perror("No children");
+          }
         }
         else{
           if((wait(NULL)) == -1){
             perror("No children");
           }
+          if((wait(NULL)) == -1){
+            perror("No children");
+          }
         }
+
         free(command);
     }
 }
+
+bool handleForkIfPipe(char *command, struct sigaction handle_kill){
+  char *cmd1;
+  char *cmd2;
+  if((strstr(command, "|")) != NULL){
+    cmd1 = strtok(command, "|");
+    cmd2 = strtok(NULL, "|");
+    if(strtok(NULL, "|") != NULL){
+      printf("Only one pipe allowed.");
+      exit(1);
+    }
+    int pfd[2];
+    if(pipe(pfd) == -1){
+      perror("failed to open pipe");
+      exit(1);
+    }
+    // close(pfd[1]);
+    // printf("pfd[0]: %d\n", pfd[0]);
+    // printf("pfd[1]: %d\n", pfd[1]);
+    handle_fork(cmd1, handle_kill, true, 0, pfd);
+    handle_fork(cmd2, handle_kill, true, 1, pfd);
+    return true;
+  }
+  else{ return false;}
+}
+
+void handle_fork(char *command,
+        struct sigaction handle_kill,
+        bool isPiped,
+        int rw_pipe_id,
+        int pfd[]){
+          if(fork() == 0){
+            handle_kill.sa_handler = kill_handler;
+            sigaction(SIGINT, &handle_kill, NULL);
+            sigaction(SIGQUIT, &handle_kill, NULL);
+
+            if(isPiped == true){
+              if(rw_pipe_id == 0){
+                close(pfd[0]);
+                if(dup2(pfd[1], 1) == -1){
+                  perror("dup2 failed to make pfd[1] a copy of stdout");
+                  exit(1);
+                }
+                // int test_pipe = open("./output.txt", O_RDWR | O_TRUNC | O_CREAT, 0666); //testing
+                // dup2(test_pipe, 1);
+                // close(test_pipe); //pipe redir
+                close(pfd[1]);
+              }
+              else if(rw_pipe_id == 1){
+                printf("pfd[0]: %d\n", pfd[0]);
+                printf("pfd[1]: %d\n", pfd[1]);
+                close(pfd[1]);
+                if(dup2(pfd[0], 0) == -1){
+                  perror("dup2 failed to copy make pfd[0] a copy of stdin");
+                  exit(1);
+                }
+                close(pfd[0]);
+              }
+            }
+
+            char cmdCopy[4096];
+            strcpy(cmdCopy, command);
+            checkRedirStdin(cmdCopy);
+            strcpy(cmdCopy, command);
+            checkRedirStdout(cmdCopy);
+            strcpy(cmdCopy, command);
+            checkRedirAppend(cmdCopy);
+            strcpy(cmdCopy, command);
+            checkRedirStderr(cmdCopy);
+            strcpy(cmdCopy, command);
+            checkRedirOutErr(cmdCopy);
+            strcpy(cmdCopy, command);
+            checkAppendOutErr(cmdCopy);
+            execCommand(command);
+            _exit(0);
+          }
+          else{
+            if(isPiped == true){
+              close(pfd[1]);
+            }
+          }
+}
+
 
 void checkRedirStdin(char *command){
   char *redirFile;
@@ -166,10 +239,16 @@ void checkRedirOutErr(char *command){
     redirFile = redirFile+3;
     redirFile = strtok(redirFile, " ");
     int fd = open(redirFile, O_RDWR | O_CREAT);
-    dup2(fd, 1);
+    if(dup2(fd, 1)){
+      perror("dup 2 failed");
+      exit(1);
+    }
     close(fd);
     fd = open(redirFile, O_RDWR | O_CREAT);
-    dup2(fd, 2);
+    if(dup2(fd, 2) ==-1){
+      perror("dup2 failed");
+      exit(1);
+    }
     if(fd == -1){
       perror("Failed to open \"redirFile\"");
       exit(1);
@@ -183,10 +262,16 @@ void checkAppendOutErr(char *command){
     redirFile = redirFile+3;
     redirFile = strtok(redirFile, " ");
     int fd = open(redirFile, O_RDWR | O_CREAT | O_APPEND);
-    dup2(fd, 1);
+    if(dup2(fd, 1) == -1){
+      perror("dup2 failed");
+      exit(1);
+    }
     close(fd);
     fd = open(redirFile, O_RDWR | O_CREAT | O_APPEND);
-    dup2(fd, 2);
+    if(dup2(fd, 2) == -1){
+      perror("dup2 failed");
+      exit(1);
+    }
     if(fd == -1){
       perror("Failed to open \"redirFile\"");
       exit(1);
